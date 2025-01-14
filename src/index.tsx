@@ -3,8 +3,8 @@
  */
 
 import React, { memo, useRef, useState, useCallback } from 'react'
-import { Dimensions, LayoutRectangle } from 'react-native'
-import { View, ViewStyle, TouchableOpacity } from 'react-native'
+import { Dimensions, LayoutRectangle, Pressable, PressableProps } from 'react-native'
+import { View, ViewStyle } from 'react-native'
 import { Animated, Easing, EasingFunction } from 'react-native'
 import { ScrollView, ScrollViewProps } from 'react-native'
 import { PanResponder, PanResponderInstance } from 'react-native'
@@ -21,6 +21,8 @@ interface GridViewProps extends ScrollViewProps {
   delayLongPress?: number
   selectedStyle?: ViewStyle
   animationConfig?: AnimationConfig
+  headerHeight?: number
+  HeaderComponent?: JSX.Element
   keyExtractor?: (item: any) => string
   renderItem: (item: any, index?: number) => JSX.Element
   renderLockedItem?: (item: any, index?: number) => JSX.Element
@@ -72,11 +74,46 @@ interface State {
   startPointOffset?: number // Offset for the starting point for scrolling
   move?: number // The position for dragging
   panResponder?: PanResponderInstance
+  headerHeight?: number
 }
+
+interface PressableOpacityProps extends PressableProps {
+  style: ViewStyle
+  disabled: boolean
+  disabledOpacity: number
+  activeOpacity: number
+}
+
+const PressableOpacity = memo(
+  ({
+    style,
+    disabled = false,
+    disabledOpacity = 0.5,
+    activeOpacity = 0.7,
+    ...passThroughProps
+  }: PressableOpacityProps) => {
+    const getOpacity = useCallback(
+      pressed => {
+        if (disabled) return disabledOpacity
+        else {
+          if (pressed) return activeOpacity
+          else return 1
+        }
+      },
+      [activeOpacity, disabled, disabledOpacity]
+    )
+
+    const _style = useCallback(({ pressed }) => [style, { opacity: getOpacity(pressed) }], [getOpacity, style])
+
+    return <Pressable style={_style} disabled={!!disabled} {...passThroughProps} />
+  }
+)
 
 const GridView = memo((props: GridViewProps) => {
   const {
     data,
+    headerHeight = 0,
+    HeaderComponent,
     keyExtractor,
     renderItem,
     renderLockedItem,
@@ -100,7 +137,7 @@ const GridView = memo((props: GridViewProps) => {
     shadowColor: '#000',
     shadowRadius: 8,
     shadowOpacity: 0.2,
-    elevation: 10,
+    elevation: 10
   }
 
   const [selectedItem, setSelectedItem] = useState<Item>(null)
@@ -109,6 +146,7 @@ const GridView = memo((props: GridViewProps) => {
     grid: [],
     items: [],
     startPointOffset: 0,
+    headerHeight
   }).current
 
   //-------------------------------------------------- Preparing
@@ -120,9 +158,7 @@ const GridView = memo((props: GridViewProps) => {
       prepareAnimations(diff)
     } else if (diff != 0) {
       onUpdateGrid()
-    } else if (
-      _.findIndex(self.items, (v: Item, i: number) => v.item != data[i]) >= 0
-    ) {
+    } else if (_.findIndex(self.items, (v: Item, i: number) => v.item != data[i]) >= 0) {
       onUpdateData()
     }
   }, [data, selectedItem])
@@ -154,7 +190,7 @@ const GridView = memo((props: GridViewProps) => {
       const opacity = new Animated.Value(1)
       const item0: Item = { item, pos, opacity }
       // While dragging
-      if (selectedItem && selectedItem.item == item) {
+      if (selectedItem?.item == item) {
         const { x: x0, y: y0 } = selectedItem.pos
         const x = x0['_value']
         const y = y0['_value']
@@ -173,7 +209,7 @@ const GridView = memo((props: GridViewProps) => {
       const config = rest.animationConfig || {
         easing: Easing.ease,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver: true
       }
 
       const grid0 = self.grid
@@ -254,11 +290,7 @@ const GridView = memo((props: GridViewProps) => {
 
   //-------------------------------------------------- Handller
   const onLayout = useCallback(
-    ({
-      nativeEvent: { layout },
-    }: {
-      nativeEvent: { layout: LayoutRectangle }
-    }) => (self.frame = layout),
+    ({ nativeEvent: { layout } }: { nativeEvent: { layout: LayoutRectangle } }) => (self.frame = layout),
     []
   )
 
@@ -302,8 +334,8 @@ const GridView = memo((props: GridViewProps) => {
   const onScroll = useCallback(
     ({
       nativeEvent: {
-        contentOffset: { y },
-      },
+        contentOffset: { y }
+      }
     }: {
       nativeEvent: { contentOffset: { y: number } }
     }) => (self.contentOffset = y),
@@ -337,7 +369,7 @@ const GridView = memo((props: GridViewProps) => {
 
       const index = Math.min(items.length - 1, colum + row * numColumns)
       const isLocked = locked && locked(items[index].item, index)
-      const itemIndex = _.findIndex(items, (v) => v.item == selectedItem.item)
+      const itemIndex = _.findIndex(items, v => v.item == selectedItem.item)
 
       if (isLocked || itemIndex == index) return
 
@@ -350,7 +382,7 @@ const GridView = memo((props: GridViewProps) => {
               toValue: grid[i],
               easing: Easing.ease,
               duration: 200,
-              useNativeDriver: true,
+              useNativeDriver: true
             })
           )
         return prev
@@ -394,24 +426,24 @@ const GridView = memo((props: GridViewProps) => {
     self.animationId = undefined
     self.startPoint = undefined
     const { grid, items } = self
-    const itemIndex = _.findIndex(items, (v) => v.item == selectedItem.item)
-    if(itemIndex >= 0 ){
-      const _newPos = grid[itemIndex];
+    const itemIndex = _.findIndex(items, v => v.item == selectedItem.item)
+    if (itemIndex >= 0) {
+      const _newPos = grid[itemIndex]
       Animated.timing(selectedItem.pos, {
         toValue: _newPos,
         easing: Easing.out(Easing.quad),
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: true
       }).start(() => {
-        items[itemIndex].pos.setValue({ x: _newPos.x, y: _newPos.y });
-        onEndRelease();
+        items[itemIndex].pos.setValue({ x: _newPos.x, y: _newPos.y })
+        onEndRelease()
       })
     }
   }, [selectedItem])
 
   const onEndRelease = useCallback(() => {
     // console.log('[GridView] onEndRelease')
-    onReleaseCell && onReleaseCell(self.items.map((v) => v.item))
+    onReleaseCell?.(self.items.map(v => v.item))
     setSelectedItem(undefined)
   }, [onReleaseCell])
 
@@ -429,7 +461,7 @@ const GridView = memo((props: GridViewProps) => {
           onPanResponderTerminationRequest: () => false,
           onPanResponderMove: onMove,
           onPanResponderRelease: onRelease,
-          onPanResponderEnd: onRelease,
+          onPanResponderEnd: onRelease
         })
       }
 
@@ -438,18 +470,19 @@ const GridView = memo((props: GridViewProps) => {
       const { cellSize, grid } = self
       const p = grid[index]
       const isLocked = locked && locked(item, index)
-      const key =
-        (keyExtractor && keyExtractor(item)) ||
-        (typeof item == 'string' ? item : `${index}`)
+      const key = keyExtractor?.(item) || (typeof item == 'string' ? item : `${index}`)
       let style: ViewStyle = {
         position: 'absolute',
         width: cellSize,
-        height: cellSize,
+        height: cellSize
       }
 
-      const isSelected = selectedItem && value.item === selectedItem.item;
-      if (!isLocked && selectedItem && isSelected)
-        style = { zIndex: 1, ...style, ...selectedStyle }
+      const isSelected = selectedItem && value.item === selectedItem.item
+      if (!isLocked && selectedItem && isSelected) style = { zIndex: 1, ...style, ...selectedStyle }
+      const transform =
+        typeof style.transform === 'object'
+          ? [...style.transform, ...pos.getTranslateTransform()]
+          : pos.getTranslateTransform()
 
       return isLocked ? (
         <View key={key} style={[style, { left: p.x, top: p.y }]}>
@@ -462,12 +495,12 @@ const GridView = memo((props: GridViewProps) => {
           style={[
             style,
             {
-              transform: pos.getTranslateTransform(),
-              opacity,
-            },
+              transform,
+              opacity
+            }
           ]}
         >
-          <TouchableOpacity
+          <PressableOpacity
             style={{ flex: 1 }}
             activeOpacity={activeOpacity}
             delayLongPress={delayLongPress}
@@ -475,32 +508,46 @@ const GridView = memo((props: GridViewProps) => {
             onPress={() => onPressCell && onPressCell(item, index)}
           >
             {renderItem(item, index)}
-          </TouchableOpacity>
+          </PressableOpacity>
         </Animated.View>
       )
     },
     [selectedItem, renderLockedItem, renderItem]
   )
 
+  const renderHeader = useCallback(() => {
+    if (!HeaderComponent) return null
+
+    return (
+      <View
+        onLayout={({ nativeEvent: { layout } }) => (self.headerHeight = Math.ceil(layout.height))}
+        style={{ position: 'absolute', top: -(self.headerHeight || 0) }}
+      >
+        {HeaderComponent}
+      </View>
+    )
+  })
+
   // console.log('[GridView] render', data.length)
   return (
     <ScrollView
       {...rest}
-      ref={(ref) => (self.scrollView = ref)}
+      ref={ref => (self.scrollView = ref)}
       onLayout={onLayout}
       onScroll={onScroll}
       scrollEnabled={!selectedItem}
       scrollEventThrottle={16}
       contentContainerStyle={{
-        marginTop: top,
+        marginTop: top + (self.headerHeight || 0),
         marginBottom: bottom,
         marginLeft: left,
-        marginRight: right,
+        marginRight: right
       }}
     >
+      {renderHeader()}
       <View
         style={{
-          height: top + self.numRows * self.cellSize + bottom,
+          height: (self.headerHeight || 0) + top + self.numRows * self.cellSize + bottom
         }}
       />
       {self.items.map((v, i) => _renderItem(v, i))}
@@ -514,7 +561,6 @@ const GridView = memo((props: GridViewProps) => {
  * @param i
  * @param j
  */
-const swap = (array: any[], i: number, j: number) =>
-  array.splice(j, 1, array.splice(i, 1, array[j])[0])
+const swap = (array: any[], i: number, j: number) => array.splice(j, 1, array.splice(i, 1, array[j])[0])
 
 export default GridView
